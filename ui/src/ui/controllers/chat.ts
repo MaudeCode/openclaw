@@ -59,6 +59,9 @@ export async function loadChatHistory(state: ChatState) {
     })) as { messages?: unknown[]; thinkingLevel?: string | null };
     state.chatMessages = Array.isArray(res.messages) ? res.messages : [];
     state.chatThinkingLevel = res.thinkingLevel ?? null;
+    // Clear streaming content now that history is loaded
+    state.chatStreamMessages = [];
+    state.chatStreamToolCalls = [];
   } catch (err) {
     state.lastError = String(err);
   } finally {
@@ -196,8 +199,8 @@ export function handleChatEvent(
       );
     }
   } else if (payload.state === "final") {
-    state.chatStreamMessages = [];
-    state.chatStreamToolCalls = [];
+    // Keep streaming content visible - it becomes the final view.
+    // Just clear the run state, not the content.
     state.chatRunId = null;
     state.chatToolsRunning = 0;
     state.chatCurrentTool = null;

@@ -185,6 +185,7 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
         host as unknown as Parameters<typeof flushChatQueueForEvent>[0],
       );
     }
+    // Reload history on final - streaming content stays visible until it loads
     if (state === "final") void loadChatHistory(host as unknown as ClawdbotApp);
     return;
   }
