@@ -140,11 +140,14 @@ export function handleChatEvent(
       const now = Date.now();
       
       // Find or create the message at this index
-      const existing = state.chatStreamMessages.find(m => m.index === messageIndex);
-      if (existing) {
-        existing.text = text;
+      const existingIndex = state.chatStreamMessages.findIndex(m => m.index === messageIndex);
+      if (existingIndex >= 0) {
+        // Update existing - create new array for reactivity
+        state.chatStreamMessages = state.chatStreamMessages.map((m, i) =>
+          i === existingIndex ? { ...m, text } : m
+        );
       } else {
-        // Insert in order
+        // Insert new message in order
         const newMsg: StreamingMessage = { index: messageIndex, text, startedAt: now };
         state.chatStreamMessages = [...state.chatStreamMessages, newMsg].sort(
           (a, b) => a.index - b.index
