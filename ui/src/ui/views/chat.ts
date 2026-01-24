@@ -370,7 +370,16 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
   const streamTools = props.streamToolCalls ?? [];
   
   if (streamMsgs.length > 0 || streamTools.length > 0) {
-    // Render messages and tool calls in order
+    // First, render any tool calls that came before any messages (afterMessageIndex = -1)
+    for (const tool of streamTools.filter(t => t.afterMessageIndex === -1)) {
+      items.push({
+        kind: "stream-tool",
+        key: `stream-tool:${props.sessionKey}:${tool.name}:${tool.startedAt}`,
+        name: tool.name,
+        status: tool.status,
+      });
+    }
+    // Then render messages and tool calls in order
     for (const msg of streamMsgs) {
       if (msg.text.trim().length > 0) {
         items.push({
@@ -389,15 +398,6 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
           status: tool.status,
         });
       }
-    }
-    // Render any tool calls that came before any messages (afterMessageIndex = -1)
-    for (const tool of streamTools.filter(t => t.afterMessageIndex === -1)) {
-      items.push({
-        kind: "stream-tool",
-        key: `stream-tool:${props.sessionKey}:${tool.name}:${tool.startedAt}`,
-        name: tool.name,
-        status: tool.status,
-      });
     }
     // Show tool indicator if tools are still running
     if ((props.toolsRunning ?? 0) > 0) {
