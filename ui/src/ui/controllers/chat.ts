@@ -168,54 +168,13 @@ export function handleChatEvent(
   } else if (payload.state === "tool-start") {
     state.chatToolsRunning = (state.chatToolsRunning || 0) + 1;
     state.chatCurrentTool = payload.tool?.name ?? null;
-    
-    // Add tool_use to the last assistant message
-    const lastIdx = state.chatMessages.length - 1;
-    if (lastIdx >= 0) {
-      const last = state.chatMessages[lastIdx] as Record<string, unknown>;
-      if (last.role === "assistant") {
-        const content = Array.isArray(last.content) ? [...last.content] : [];
-        content.push({
-          type: "tool_use",
-          name: payload.tool?.name ?? "tool",
-          arguments: payload.tool?.args,
-          _running: true,
-        });
-        state.chatMessages = [
-          ...state.chatMessages.slice(0, lastIdx),
-          { ...last, content },
-        ];
-      }
-    }
+    // Don't add tool_use to messages - history will provide tool cards
   } else if (payload.state === "tool-end") {
     state.chatToolsRunning = Math.max(0, (state.chatToolsRunning || 0) - 1);
     if (state.chatToolsRunning === 0) {
       state.chatCurrentTool = null;
     }
-    
-    // Update the tool_use in the last assistant message to include result
-    const lastIdx = state.chatMessages.length - 1;
-    if (lastIdx >= 0) {
-      const last = state.chatMessages[lastIdx] as Record<string, unknown>;
-      if (last.role === "assistant") {
-        const content = Array.isArray(last.content) ? [...last.content] : [];
-        // Find the running tool with this name and update it
-        const toolIdx = content.findIndex(
-          (c: any) => c.type === "tool_use" && c.name === payload.tool?.name && c._running
-        );
-        if (toolIdx >= 0) {
-          content[toolIdx] = {
-            ...content[toolIdx],
-            _running: false,
-            result: payload.tool?.result,
-          };
-          state.chatMessages = [
-            ...state.chatMessages.slice(0, lastIdx),
-            { ...last, content },
-          ];
-        }
-      }
-    }
+    // Don't add tool results - history will provide them
   } else if (payload.state === "final") {
     state.chatRunId = null;
     state.chatToolsRunning = 0;
