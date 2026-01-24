@@ -11,8 +11,8 @@ import {
   renderMessageGroup,
   renderReadingIndicatorGroup,
   renderStreamingGroup,
-  renderStreamingToolCard,
 } from "../chat/grouped-render";
+import { renderToolCardSidebar } from "../chat/tool-cards";
 import { renderMarkdownSidebar } from "./markdown-sidebar";
 import "../components/resizable-divider";
 
@@ -146,14 +146,34 @@ export function renderChat(props: ChatProps) {
         }
 
         if (item.kind === "stream-tool") {
-          return renderStreamingToolCard(
-            item.name,
-            item.status,
-            assistantIdentity,
-            item.args,
-            item.result,
-            props.onOpenSidebar,
-          );
+          // Use the same card component as history - unified rendering
+          const card = {
+            kind: "call" as const,
+            name: item.name,
+            args: item.args,
+            text: item.result,
+          };
+          return html`
+            <div class="chat-group assistant">
+              <div class="chat-avatar assistant" title="${assistantIdentity.name}">
+                ${assistantIdentity.avatar
+                  ? html`<img src="${assistantIdentity.avatar}" alt="${assistantIdentity.name}" />`
+                  : assistantIdentity.name?.charAt(0).toUpperCase() || "A"}
+              </div>
+              <div class="chat-group-messages">
+                ${item.status === "running"
+                  ? html`<div class="chat-tool-card chat-tool-card--running">
+                      <div class="chat-tool-card__header">
+                        <div class="chat-tool-card__title">
+                          <span class="chat-tool-card__spinner"></span>
+                          <span>${item.name}</span>
+                        </div>
+                      </div>
+                    </div>`
+                  : renderToolCardSidebar(card, props.onOpenSidebar)}
+              </div>
+            </div>
+          `;
         }
 
         if (item.kind === "group") {
