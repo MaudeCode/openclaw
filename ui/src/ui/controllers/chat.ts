@@ -61,12 +61,8 @@ export async function loadChatHistory(state: ChatState) {
     })) as { messages?: unknown[]; thinkingLevel?: string | null };
     state.chatMessages = Array.isArray(res.messages) ? res.messages : [];
     state.chatThinkingLevel = res.thinkingLevel ?? null;
-    // Clear streaming TEXT messages (history has them now)
-    // But KEEP streaming tool cards (they have richer data than history)
-    if (!state.chatRunId) {
-      state.chatStreamMessages = [];
-      // Don't clear chatStreamToolCalls - they persist until new run
-    }
+    // Keep ALL streaming content (messages + tool cards) - they're interleaved correctly
+    // Only clear on new run start (not on history load)
   } catch (err) {
     state.lastError = String(err);
   } finally {
