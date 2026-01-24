@@ -278,7 +278,27 @@ export function createAgentEventHandler({
           });
         } else if (toolPhase === "result") {
           // Include result content (truncated for large outputs)
-          const result = typeof evt.data.result === "string" ? evt.data.result : undefined;
+          // Result can be a string or an object with content array
+          let result: string | undefined;
+          if (typeof evt.data.result === "string") {
+            result = evt.data.result;
+          } else if (evt.data.result && typeof evt.data.result === "object") {
+            const r = evt.data.result as Record<string, unknown>;
+            if (Array.isArray(r.content)) {
+              const texts = r.content
+                .filter(
+                  (item): item is { type: string; text: string } =>
+                    item &&
+                    typeof item === "object" &&
+                    (item as Record<string, unknown>).type === "text" &&
+                    typeof (item as Record<string, unknown>).text === "string",
+                )
+                .map((item) => item.text);
+              if (texts.length > 0) {
+                result = texts.join("\n");
+              }
+            }
+          }
           emitToolEvent(sessionKey, clientRunId, evt.seq, "end", evt.data.name, toolCallId, {
             result,
           });
