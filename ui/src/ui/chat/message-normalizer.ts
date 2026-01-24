@@ -61,6 +61,7 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
 
 /**
  * Normalize role for grouping purposes.
+ * Tool results are grouped with assistant messages since they're part of the assistant's response.
  */
 export function normalizeRoleForGrouping(role: string): string {
   const lower = role.toLowerCase();
@@ -68,14 +69,15 @@ export function normalizeRoleForGrouping(role: string): string {
   if (role === "user" || role === "User") return role;
   if (role === "assistant") return "assistant";
   if (role === "system") return "system";
-  // Keep tool-related roles distinct so the UI can style/toggle them.
+  // Tool results are part of the assistant's response - group them together
+  // This ensures streaming and history render identically
   if (
     lower === "toolresult" ||
     lower === "tool_result" ||
     lower === "tool" ||
     lower === "function"
   ) {
-    return "tool";
+    return "assistant";
   }
   return role;
 }
