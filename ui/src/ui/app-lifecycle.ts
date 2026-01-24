@@ -26,6 +26,7 @@ type LifecycleHost = {
   chatMessages: unknown[];
   chatToolMessages: unknown[];
   chatStreamMessages: unknown[];
+  chatStreamToolCalls: unknown[];
   logsAutoFollow: boolean;
   logsAtBottom: boolean;
   logsEntries: unknown[];
@@ -84,6 +85,7 @@ export function handleUpdated(
     (changed.has("chatMessages") ||
       changed.has("chatToolMessages") ||
       changed.has("chatStreamMessages") ||
+      changed.has("chatStreamToolCalls") ||
       changed.has("chatLoading") ||
       changed.has("tab"))
   ) {
