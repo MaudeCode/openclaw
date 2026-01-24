@@ -370,21 +370,12 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
       },
     });
   }
-  const hasStreamingContent = (props.streamMessages?.length ?? 0) > 0 || 
-                              (props.streamToolCalls?.length ?? 0) > 0;
-  
   for (let i = historyStart; i < history.length; i++) {
     const msg = history[i];
     const normalized = normalizeMessage(msg);
 
     // Skip tool_result messages - streaming tool cards show results
     if (normalized.role.toLowerCase() === "toolresult") {
-      continue;
-    }
-
-    // When streaming content exists, only show user messages from history
-    // (streaming provides the assistant response with proper interleaving)
-    if (hasStreamingContent && normalized.role === "assistant") {
       continue;
     }
 
