@@ -32,8 +32,8 @@ export type ChatProps = {
   compactionStatus?: CompactionIndicatorStatus | null;
   messages: unknown[];
   toolMessages: unknown[];
-  stream: string | null;
-  streamStartedAt: number | null;
+  /** Array of streaming messages (one per assistant message in the run) */
+  streamMessages: Array<{ index: number; text: string; startedAt: number }>;
   /** Number of tools currently running */
   toolsRunning?: number;
   /** Name of the most recently started tool */
@@ -358,20 +358,23 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
     }
   }
 
-  if (props.stream !== null) {
-    const key = `stream:${props.sessionKey}:${props.streamStartedAt ?? "live"}`;
-    if (props.stream.trim().length > 0) {
-      items.push({
-        kind: "stream",
-        key,
-        text: props.stream,
-        startedAt: props.streamStartedAt ?? Date.now(),
-      });
-    } else {
-      // Show reading indicator with tool info if available
+  // Render streaming messages (each as a separate bubble)
+  if (props.streamMessages && props.streamMessages.length > 0) {
+    for (const msg of props.streamMessages) {
+      if (msg.text.trim().length > 0) {
+        items.push({
+          kind: "stream",
+          key: `stream:${props.sessionKey}:${msg.index}`,
+          text: msg.text,
+          startedAt: msg.startedAt,
+        });
+      }
+    }
+    // Show tool indicator after the last message if tools are running
+    if ((props.toolsRunning ?? 0) > 0) {
       items.push({
         kind: "reading-indicator",
-        key,
+        key: `tool-indicator:${props.sessionKey}`,
         toolsRunning: props.toolsRunning ?? 0,
         currentTool: props.currentTool ?? null,
       });

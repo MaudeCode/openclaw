@@ -2,6 +2,13 @@ import type { GatewayBrowserClient } from "../gateway";
 import { extractText } from "../chat/message-extract";
 import { generateUUID } from "../uuid";
 
+/** A single streaming message within a run */
+export type StreamingMessage = {
+  index: number;
+  text: string;
+  startedAt: number;
+};
+
 export type ChatState = {
   client: GatewayBrowserClient | null;
   connected: boolean;
@@ -12,8 +19,8 @@ export type ChatState = {
   chatSending: boolean;
   chatMessage: string;
   chatRunId: string | null;
-  chatStream: string | null;
-  chatStreamStartedAt: number | null;
+  /** Array of streaming messages (one per assistant message in the run) */
+  chatStreamMessages: StreamingMessage[];
   /** Number of currently running tools (for loading indicator) */
   chatToolsRunning: number;
   /** Name of the most recently started tool */
@@ -25,6 +32,7 @@ export type ChatEventPayload = {
   runId: string;
   sessionKey: string;
   state: "delta" | "final" | "aborted" | "error" | "tool-start" | "tool-end";
+  messageIndex?: number;
   message?: unknown;
   errorMessage?: string;
   tool?: { name: string };
@@ -67,8 +75,7 @@ export async function sendChatMessage(state: ChatState, message: string): Promis
   state.lastError = null;
   const runId = generateUUID();
   state.chatRunId = runId;
-  state.chatStream = "";
-  state.chatStreamStartedAt = now;
+  state.chatStreamMessages = [];
   state.chatToolsRunning = 0;
   state.chatCurrentTool = null;
   try {
@@ -82,8 +89,7 @@ export async function sendChatMessage(state: ChatState, message: string): Promis
   } catch (err) {
     const error = String(err);
     state.chatRunId = null;
-    state.chatStream = null;
-    state.chatStreamStartedAt = null;
+    state.chatStreamMessages = [];
     state.chatToolsRunning = 0;
     state.chatCurrentTool = null;
     state.lastError = error;
@@ -128,11 +134,22 @@ export function handleChatEvent(
     return null;
 
   if (payload.state === "delta") {
-    const next = extractText(payload.message);
-    if (typeof next === "string") {
-      // Server accumulates text across all assistant messages in a run,
-      // so we always accept the latest text without length checks.
-      state.chatStream = next;
+    const text = extractText(payload.message);
+    if (typeof text === "string") {
+      const messageIndex = payload.messageIndex ?? 0;
+      const now = Date.now();
+      
+      // Find or create the message at this index
+      const existing = state.chatStreamMessages.find(m => m.index === messageIndex);
+      if (existing) {
+        existing.text = text;
+      } else {
+        // Insert in order
+        const newMsg: StreamingMessage = { index: messageIndex, text, startedAt: now };
+        state.chatStreamMessages = [...state.chatStreamMessages, newMsg].sort(
+          (a, b) => a.index - b.index
+        );
+      }
     }
   } else if (payload.state === "tool-start") {
     state.chatToolsRunning = (state.chatToolsRunning || 0) + 1;
@@ -143,21 +160,18 @@ export function handleChatEvent(
       state.chatCurrentTool = null;
     }
   } else if (payload.state === "final") {
-    state.chatStream = null;
+    state.chatStreamMessages = [];
     state.chatRunId = null;
-    state.chatStreamStartedAt = null;
     state.chatToolsRunning = 0;
     state.chatCurrentTool = null;
   } else if (payload.state === "aborted") {
-    state.chatStream = null;
+    state.chatStreamMessages = [];
     state.chatRunId = null;
-    state.chatStreamStartedAt = null;
     state.chatToolsRunning = 0;
     state.chatCurrentTool = null;
   } else if (payload.state === "error") {
-    state.chatStream = null;
+    state.chatStreamMessages = [];
     state.chatRunId = null;
-    state.chatStreamStartedAt = null;
     state.chatToolsRunning = 0;
     state.chatCurrentTool = null;
     state.lastError = payload.errorMessage ?? "chat error";
