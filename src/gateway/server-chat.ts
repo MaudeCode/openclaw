@@ -217,9 +217,13 @@ export function createAgentEventHandler({
     // Include sessionKey so Control UI can filter tool streams per session.
     const agentPayload = sessionKey ? { ...evt, sessionKey } : evt;
     const last = agentRunSeq.get(evt.runId) ?? 0;
-    if (evt.stream === "tool" && !shouldEmitToolEvents(evt.runId, sessionKey)) {
+    // For verbose mode filtering of detailed tool events on the "agent" channel.
+    // But we still need to process tool events for messageIndex and chat channel.
+    const skipDetailedToolBroadcast =
+      evt.stream === "tool" && !shouldEmitToolEvents(evt.runId, sessionKey);
+    if (skipDetailedToolBroadcast) {
       agentRunSeq.set(evt.runId, evt.seq);
-      return;
+      // Don't return - still need to handle tool-start/end for chat streaming
     }
     if (evt.seq !== last + 1) {
       broadcast("agent", {
@@ -235,13 +239,19 @@ export function createAgentEventHandler({
       });
     }
     agentRunSeq.set(evt.runId, evt.seq);
-    broadcast("agent", agentPayload);
+    // Skip detailed agent broadcast for tools when verbose is off
+    if (!skipDetailedToolBroadcast) {
+      broadcast("agent", agentPayload);
+    }
 
     const lifecyclePhase =
       evt.stream === "lifecycle" && typeof evt.data?.phase === "string" ? evt.data.phase : null;
 
     if (sessionKey) {
-      nodeSendToSession(sessionKey, "agent", agentPayload);
+      // Skip detailed agent broadcast for tools when verbose is off
+      if (!skipDetailedToolBroadcast) {
+        nodeSendToSession(sessionKey, "agent", agentPayload);
+      }
       if (!isAborted && evt.stream === "assistant" && typeof evt.data?.text === "string") {
         emitChatDelta(sessionKey, clientRunId, evt.seq, evt.data.text);
       } else if (
