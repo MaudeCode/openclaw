@@ -12,7 +12,6 @@ import {
   renderReadingIndicatorGroup,
   renderStreamingGroup,
 } from "../chat/grouped-render";
-import { renderToolCardSidebar } from "../chat/tool-cards";
 import { renderMarkdownSidebar } from "./markdown-sidebar";
 import "../components/resizable-divider";
 
@@ -145,45 +144,14 @@ export function renderChat(props: ChatProps) {
           );
         }
 
-        if (item.kind === "stream-tool") {
-          // Use the same card component as history - unified rendering
-          const card = {
-            kind: "call" as const,
-            name: item.name,
-            args: item.args,
-            text: item.result,
-          };
-          return html`
-            <div class="chat-group assistant">
-              <div class="chat-avatar assistant" title="${assistantIdentity.name}">
-                ${assistantIdentity.avatar
-                  ? html`<img src="${assistantIdentity.avatar}" alt="${assistantIdentity.name}" />`
-                  : assistantIdentity.name?.charAt(0).toUpperCase() || "A"}
-              </div>
-              <div class="chat-group-messages">
-                ${item.status === "running"
-                  ? html`<div class="chat-tool-card chat-tool-card--running">
-                      <div class="chat-tool-card__header">
-                        <div class="chat-tool-card__title">
-                          <span class="chat-tool-card__spinner"></span>
-                          <span>${item.name}</span>
-                        </div>
-                      </div>
-                    </div>`
-                  : renderToolCardSidebar(card, props.onOpenSidebar)}
-              </div>
-            </div>
-          `;
-        }
+        // stream-tool items are no longer rendered - history provides tool cards
 
         if (item.kind === "group") {
-          const hasStreamingToolCards = (props.streamToolCalls?.length ?? 0) > 0;
           return renderMessageGroup(item, {
             onOpenSidebar: props.onOpenSidebar,
             showReasoning,
             assistantName: props.assistantName,
             assistantAvatar: assistantIdentity.avatar,
-            skipToolCards: hasStreamingToolCards,
           });
         }
 
@@ -374,10 +342,7 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
     const msg = history[i];
     const normalized = normalizeMessage(msg);
 
-    // Skip tool_result messages - streaming tool cards show results
-    if (normalized.role.toLowerCase() === "toolresult") {
-      continue;
-    }
+    // Tool result messages are handled by extractToolCards in renderGroupedMessage
 
     items.push({
       kind: "message",
@@ -395,53 +360,28 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
     }
   }
 
-  // Render streaming messages and tool calls interleaved
+  // Render streaming text messages
   const streamMsgs = props.streamMessages ?? [];
-  const streamTools = props.streamToolCalls ?? [];
   
-  if (streamMsgs.length > 0 || streamTools.length > 0) {
-    // First, render any tool calls that came before any messages (afterMessageIndex = -1)
-    for (const tool of streamTools.filter(t => t.afterMessageIndex === -1)) {
+  for (const msg of streamMsgs) {
+    if (msg.text.trim().length > 0) {
       items.push({
-        kind: "stream-tool",
-        key: `stream-tool:${props.sessionKey}:${tool.name}:${tool.startedAt}`,
-        name: tool.name,
-        status: tool.status,
-        args: tool.args,
-        result: tool.result,
+        kind: "stream",
+        key: `stream:${props.sessionKey}:${msg.index}`,
+        text: msg.text,
+        startedAt: msg.startedAt,
       });
     }
-    // Then render messages and tool calls in order
-    for (const msg of streamMsgs) {
-      if (msg.text.trim().length > 0) {
-        items.push({
-          kind: "stream",
-          key: `stream:${props.sessionKey}:${msg.index}`,
-          text: msg.text,
-          startedAt: msg.startedAt,
-        });
-      }
-      // Render any tool calls that came after this message
-      for (const tool of streamTools.filter(t => t.afterMessageIndex === msg.index)) {
-        items.push({
-          kind: "stream-tool",
-          key: `stream-tool:${props.sessionKey}:${tool.name}:${tool.startedAt}`,
-          name: tool.name,
-          status: tool.status,
-          args: tool.args,
-          result: tool.result,
-        });
-      }
-    }
-    // Show tool indicator if tools are still running
-    if ((props.toolsRunning ?? 0) > 0) {
-      items.push({
-        kind: "reading-indicator",
-        key: `tool-indicator:${props.sessionKey}`,
-        toolsRunning: props.toolsRunning ?? 0,
-        currentTool: props.currentTool ?? null,
-      });
-    }
+  }
+  
+  // Show tool indicator if tools are still running
+  if ((props.toolsRunning ?? 0) > 0) {
+    items.push({
+      kind: "reading-indicator",
+      key: `tool-indicator:${props.sessionKey}`,
+      toolsRunning: props.toolsRunning ?? 0,
+      currentTool: props.currentTool ?? null,
+    });
   }
 
   return groupMessages(items);

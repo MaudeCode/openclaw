@@ -89,7 +89,6 @@ export function renderMessageGroup(
     showReasoning: boolean;
     assistantName?: string;
     assistantAvatar?: string | null;
-    skipToolCards?: boolean;
   },
 ) {
   const normalizedRole = normalizeRoleForGrouping(group.role);
@@ -124,7 +123,6 @@ export function renderMessageGroup(
             {
               isStreaming:
                 group.isStreaming && index === group.messages.length - 1,
-              skipToolCards: opts.skipToolCards,
               showReasoning: opts.showReasoning,
             },
             opts.onOpenSidebar,
@@ -187,7 +185,7 @@ function isAvatarUrl(value: string): boolean {
 
 function renderGroupedMessage(
   message: unknown,
-  opts: { isStreaming: boolean; showReasoning: boolean; skipToolCards?: boolean },
+  opts: { isStreaming: boolean; showReasoning: boolean },
   onOpenSidebar?: (content: string) => void,
 ) {
   const m = message as Record<string, unknown>;
@@ -199,8 +197,7 @@ function renderGroupedMessage(
     typeof m.toolCallId === "string" ||
     typeof m.tool_call_id === "string";
 
-  // Skip tool cards if streaming tool cards exist (they have richer data)
-  const toolCards = opts.skipToolCards ? [] : extractToolCards(message);
+  const toolCards = extractToolCards(message);
   const hasToolCards = toolCards.length > 0;
 
   const extractedText = extractTextCached(message);
