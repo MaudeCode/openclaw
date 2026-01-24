@@ -185,9 +185,8 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
         host as unknown as Parameters<typeof flushChatQueueForEvent>[0],
       );
     }
-    // Reload history on final to sync text messages
-    // (streaming tool cards are kept via skipToolCards logic)
-    if (state === "final") void loadChatHistory(host as unknown as ClawdbotApp);
+    // Don't reload history on final - streaming built the same data structure
+    // History will load on page refresh or next conversation
     return;
   }
 

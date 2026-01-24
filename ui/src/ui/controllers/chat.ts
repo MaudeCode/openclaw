@@ -168,13 +168,47 @@ export function handleChatEvent(
   } else if (payload.state === "tool-start") {
     state.chatToolsRunning = (state.chatToolsRunning || 0) + 1;
     state.chatCurrentTool = payload.tool?.name ?? null;
-    // Don't add tool_use to messages - history will provide tool cards
+    
+    // Add tool_use to current assistant message (exact format extractToolCards expects)
+    const lastIdx = state.chatMessages.length - 1;
+    if (lastIdx >= 0) {
+      const last = state.chatMessages[lastIdx] as Record<string, unknown>;
+      if (last.role === "assistant") {
+        const content = Array.isArray(last.content) ? [...last.content] : [];
+        content.push({
+          type: "tool_use",
+          name: payload.tool?.name ?? "tool",
+          arguments: payload.tool?.args,
+        });
+        state.chatMessages = [
+          ...state.chatMessages.slice(0, lastIdx),
+          { ...last, content },
+        ];
+      }
+    }
   } else if (payload.state === "tool-end") {
     state.chatToolsRunning = Math.max(0, (state.chatToolsRunning || 0) - 1);
     if (state.chatToolsRunning === 0) {
       state.chatCurrentTool = null;
     }
-    // Don't add tool results - history will provide them
+    
+    // Add tool_result to current assistant message (exact format extractToolCards expects)
+    const lastIdx = state.chatMessages.length - 1;
+    if (lastIdx >= 0) {
+      const last = state.chatMessages[lastIdx] as Record<string, unknown>;
+      if (last.role === "assistant") {
+        const content = Array.isArray(last.content) ? [...last.content] : [];
+        content.push({
+          type: "tool_result",
+          name: payload.tool?.name ?? "tool",
+          text: payload.tool?.result,
+        });
+        state.chatMessages = [
+          ...state.chatMessages.slice(0, lastIdx),
+          { ...last, content },
+        ];
+      }
+    }
   } else if (payload.state === "final") {
     state.chatRunId = null;
     state.chatToolsRunning = 0;
