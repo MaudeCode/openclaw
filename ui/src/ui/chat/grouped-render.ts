@@ -3,7 +3,7 @@ import { unsafeHTML } from "lit/directives/unsafe-html.js";
 
 import type { AssistantIdentity } from "../assistant-identity";
 import { toSanitizedMarkdownHtml } from "../markdown";
-import type { MessageGroup } from "../types/chat-types";
+import type { MessageGroup, ToolCard } from "../types/chat-types";
 import { renderCopyAsMarkdownButton } from "./copy-as-markdown";
 import { isToolResultMessage, normalizeRoleForGrouping } from "./message-normalizer";
 import {
@@ -12,6 +12,62 @@ import {
   formatReasoningMarkdown,
 } from "./message-extract";
 import { extractToolCards, renderToolCardSidebar } from "./tool-cards";
+
+/**
+ * Collect and pair tool cards from all messages in a group.
+ * This ensures toolCall cards are merged with their corresponding toolResult.
+ */
+function collectAndPairToolCards(messages: Array<{ message: unknown }>): ToolCard[] {
+  const callCards: ToolCard[] = [];
+  const resultCards: ToolCard[] = [];
+
+  for (const { message } of messages) {
+    const cards = extractToolCards(message);
+    for (const card of cards) {
+      if (card.kind === "call") {
+        callCards.push(card);
+      } else {
+        resultCards.push(card);
+      }
+    }
+  }
+
+  // Merge result text into call cards by matching id/name
+  const paired: ToolCard[] = [];
+  const usedResults = new Set<number>();
+
+  for (const call of callCards) {
+    // Find matching result by id first, then by name
+    let resultIndex = -1;
+    if (call.id) {
+      resultIndex = resultCards.findIndex((r, i) => !usedResults.has(i) && r.id === call.id);
+    }
+    if (resultIndex === -1) {
+      resultIndex = resultCards.findIndex((r, i) => !usedResults.has(i) && r.name === call.name);
+    }
+
+    if (resultIndex !== -1) {
+      usedResults.add(resultIndex);
+      // Merge: call card gets the result text
+      paired.push({
+        ...call,
+        text: resultCards[resultIndex].text,
+      });
+    } else {
+      // No result yet (still running or no output)
+      paired.push(call);
+    }
+  }
+
+  // Add any orphan results (shouldn't happen normally)
+  for (let i = 0; i < resultCards.length; i++) {
+    if (!usedResults.has(i)) {
+      paired.push(resultCards[i]);
+    }
+  }
+
+  return paired;
+}
 
 export type ReadingIndicatorOptions = {
   toolsRunning?: number;
@@ -110,6 +166,10 @@ export function renderMessageGroup(
     minute: "2-digit",
   });
 
+  // Collect and pair tool cards across all messages in the group
+  // This ensures toolCall and toolResult are merged into single cards
+  const pairedToolCards = collectAndPairToolCards(group.messages);
+
   return html`
     <div class="chat-group ${roleClass}">
       ${renderAvatar(group.role, {
@@ -124,6 +184,9 @@ export function renderMessageGroup(
               isStreaming:
                 group.isStreaming && index === group.messages.length - 1,
               showReasoning: opts.showReasoning,
+              // Pass paired cards only for first non-toolResult message
+              pairedToolCards: index === 0 ? pairedToolCards : undefined,
+              skipToolCards: index > 0, // Skip tool cards for subsequent messages
             },
             opts.onOpenSidebar,
           ),
@@ -185,7 +248,12 @@ function isAvatarUrl(value: string): boolean {
 
 function renderGroupedMessage(
   message: unknown,
-  opts: { isStreaming: boolean; showReasoning: boolean },
+  opts: {
+    isStreaming: boolean;
+    showReasoning: boolean;
+    pairedToolCards?: ToolCard[];
+    skipToolCards?: boolean;
+  },
   onOpenSidebar?: (content: string) => void,
 ) {
   const m = message as Record<string, unknown>;
@@ -197,8 +265,19 @@ function renderGroupedMessage(
     typeof m.toolCallId === "string" ||
     typeof m.tool_call_id === "string";
 
-  const toolCards = extractToolCards(message);
+  // Use paired tool cards if provided, otherwise extract from this message
+  // skipToolCards: don't render any tool cards (they were rendered by first message in group)
+  const toolCards = opts.skipToolCards ? [] : (opts.pairedToolCards ?? extractToolCards(message));
   const hasToolCards = toolCards.length > 0;
+
+  // For toolResult messages, only render tool cards (which we got from pairing)
+  // If skipToolCards is true, render nothing for toolResult messages
+  if (isToolResult) {
+    if (opts.skipToolCards || !hasToolCards) {
+      return nothing;
+    }
+    return html`${toolCards.map((card) => renderToolCardSidebar(card, onOpenSidebar))}`;
+  }
 
   const extractedText = extractTextCached(message);
   const extractedThinking =
@@ -221,13 +300,7 @@ function renderGroupedMessage(
     .filter(Boolean)
     .join(" ");
 
-  // Tool result messages: only show the tool card, not the raw output text
-  if (isToolResult && hasToolCards) {
-    return html`${toolCards.map((card) =>
-      renderToolCardSidebar(card, onOpenSidebar),
-    )}`;
-  }
-
+  // Note: Tool result messages are handled above (early return)
   if (!markdown && !hasToolCards) return nothing;
 
   return html`
