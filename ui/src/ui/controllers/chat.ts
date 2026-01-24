@@ -26,7 +26,7 @@ export type ChatEventPayload = {
   messageIndex?: number;
   message?: unknown;
   errorMessage?: string;
-  tool?: { name: string; args?: unknown; result?: string };
+  tool?: { id?: string; name: string; args?: unknown; result?: string };
 };
 
 export async function loadChatHistory(state: ChatState) {
@@ -169,14 +169,16 @@ export function handleChatEvent(
     state.chatToolsRunning = (state.chatToolsRunning || 0) + 1;
     state.chatCurrentTool = payload.tool?.name ?? null;
     
-    // Add tool_use to current assistant message (exact format extractToolCards expects)
+    // Add toolCall to current assistant message (exact format matching history)
+    // History format: { type: "toolCall", id: "toolu_...", name: "exec", arguments: {...} }
     const lastIdx = state.chatMessages.length - 1;
     if (lastIdx >= 0) {
       const last = state.chatMessages[lastIdx] as Record<string, unknown>;
       if (last.role === "assistant") {
         const content = Array.isArray(last.content) ? [...last.content] : [];
         content.push({
-          type: "tool_use",
+          type: "toolCall",
+          id: payload.tool?.id ?? `tool_${Date.now()}`,
           name: payload.tool?.name ?? "tool",
           arguments: payload.tool?.args,
         });
@@ -192,23 +194,18 @@ export function handleChatEvent(
       state.chatCurrentTool = null;
     }
     
-    // Add tool_result to current assistant message (exact format extractToolCards expects)
-    const lastIdx = state.chatMessages.length - 1;
-    if (lastIdx >= 0) {
-      const last = state.chatMessages[lastIdx] as Record<string, unknown>;
-      if (last.role === "assistant") {
-        const content = Array.isArray(last.content) ? [...last.content] : [];
-        content.push({
-          type: "tool_result",
-          name: payload.tool?.name ?? "tool",
-          text: payload.tool?.result,
-        });
-        state.chatMessages = [
-          ...state.chatMessages.slice(0, lastIdx),
-          { ...last, content },
-        ];
-      }
-    }
+    // Add toolResult as a SEPARATE message (exact format matching history)
+    // History format: { role: "toolResult", toolCallId: "toolu_...", toolName: "exec", content: [{type: "text", text}] }
+    state.chatMessages = [
+      ...state.chatMessages,
+      {
+        role: "toolResult",
+        toolCallId: payload.tool?.id ?? `tool_${Date.now()}`,
+        toolName: payload.tool?.name ?? "tool",
+        content: [{ type: "text", text: payload.tool?.result ?? "" }],
+        timestamp: Date.now(),
+      },
+    ];
   } else if (payload.state === "final") {
     state.chatRunId = null;
     state.chatToolsRunning = 0;

@@ -116,6 +116,7 @@ export function createAgentEventHandler({
     seq: number,
     phase: "start" | "end",
     toolName: string,
+    toolCallId: string,
     extra?: { args?: unknown; result?: string },
   ) => {
     // On tool-start, increment the message index so the next assistant text
@@ -131,6 +132,7 @@ export function createAgentEventHandler({
       seq,
       state: phase === "start" ? ("tool-start" as const) : ("tool-end" as const),
       tool: {
+        id: toolCallId,
         name: toolName,
         ...(extra?.args != null ? { args: extra.args } : {}),
         ...(extra?.result != null ? { result: extra.result } : {}),
@@ -268,14 +270,16 @@ export function createAgentEventHandler({
         // Emit tool start/end events to the chat channel for loading indicators.
         // Always emit these regardless of verbose setting (verbose controls detailed agent events).
         const toolPhase = evt.data.phase;
+        const toolCallId =
+          typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : `tool_${evt.seq}`;
         if (toolPhase === "start") {
-          emitToolEvent(sessionKey, clientRunId, evt.seq, "start", evt.data.name, {
+          emitToolEvent(sessionKey, clientRunId, evt.seq, "start", evt.data.name, toolCallId, {
             args: evt.data.args,
           });
         } else if (toolPhase === "result") {
           // Include result content (truncated for large outputs)
           const result = typeof evt.data.result === "string" ? evt.data.result : undefined;
-          emitToolEvent(sessionKey, clientRunId, evt.seq, "end", evt.data.name, {
+          emitToolEvent(sessionKey, clientRunId, evt.seq, "end", evt.data.name, toolCallId, {
             result,
           });
         }

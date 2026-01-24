@@ -309,7 +309,7 @@ function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup> {
 function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
   const items: ChatItem[] = [];
   const history = Array.isArray(props.messages) ? props.messages : [];
-  const tools = Array.isArray(props.toolMessages) ? props.toolMessages : [];
+  // toolMessages is no longer used - all tool data is in chatMessages
   const historyStart = Math.max(0, history.length - CHAT_HISTORY_RENDER_LIMIT);
   if (historyStart > 0) {
     items.push({
@@ -324,30 +324,15 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
   }
   for (let i = historyStart; i < history.length; i++) {
     const msg = history[i];
-    const normalized = normalizeMessage(msg);
-
-    // Skip tool_result role messages - results are embedded in assistant message content
-    if (normalized.role.toLowerCase() === "tool" || 
-        normalized.role.toLowerCase() === "toolresult" ||
-        normalized.role.toLowerCase() === "tool_result") {
-      continue;
-    }
-
+    // Include ALL messages including toolResult - they render as tool cards
     items.push({
       kind: "message",
       key: messageKey(msg, i),
       message: msg,
     });
   }
-  if (props.showThinking) {
-    for (let i = 0; i < tools.length; i++) {
-      items.push({
-        kind: "message",
-        key: messageKey(tools[i], i + history.length),
-        message: tools[i],
-      });
-    }
-  }
+  // Removed: toolMessages rendering - tool data is now in chatMessages directly
+  // This ensures streaming builds identical structure to history (no duplicates)
 
   // Show tool indicator if tools are still running
   if ((props.toolsRunning ?? 0) > 0) {

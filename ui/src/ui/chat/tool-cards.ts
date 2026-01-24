@@ -19,12 +19,14 @@ export function extractToolCards(message: unknown): ToolCard[] {
     const kind = String(item.type ?? "").toLowerCase();
     const isToolCall =
       ["toolcall", "tool_call", "tooluse", "tool_use"].includes(kind) ||
-      (typeof item.name === "string" && item.arguments != null);
+      (typeof item.name === "string" && item.arguments != null) ||
+      (typeof item.id === "string" && typeof item.name === "string"); // History format: { type: "toolCall", id, name, arguments }
     if (isToolCall) {
       cards.push({
         kind: "call",
         name: (item.name as string) ?? "tool",
         args: coerceArgs(item.arguments ?? item.args),
+        id: typeof item.id === "string" ? item.id : undefined,
       });
     }
   }
